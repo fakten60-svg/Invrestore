@@ -48,10 +48,10 @@ Voraussetzung: **JDK 25** (`JAVA_HOME` gesetzt).
 
 ```bash
 # Linux/macOS
-./gradlew build
+./gradlew clean build
 
 # Windows
-gradlew.bat build
+gradlew.bat clean build
 ```
 
 Das Ergebnis liegt unter:
@@ -79,23 +79,28 @@ Tests ausführen:
 
 ## Commands
 
+Der einzige Command der Mod ist **`/invre`** (Inventory Restore).
+
 | Befehl                          | Wirkung                                              | Berechtigung              |
 |---------------------------------|------------------------------------------------------|---------------------------|
-| `/infor`                        | Eigene Death-Backups auflisten                       | `invrestore.self`         |
-| `/infor latest`                 | Neuestes wiederherstellbares Backup wiederherstellen | `invrestore.self`         |
-| `/infor <index>`                | Bestimmtes Backup per Nummer wiederherstellen        | `invrestore.self`         |
-| `/infor <death-id>`             | Bestimmtes Backup per UUID(-Präfix) wiederherstellen | `invrestore.self`         |
-| `/infor <player>`               | Backups eines anderen Spielers auflisten             | `invrestore.admin`        |
-| `/infor <player> latest`        | Neuestes Backup eines anderen Spielers wiederherstellen | `invrestore.admin.others` |
-| `/infor <player> <index/id>`    | Bestimmtes Backup eines anderen Spielers wiederherstellen | `invrestore.admin.others` |
+| `/invre`                        | Eigene Death-Backups auflisten                       | `invrestore.self`         |
+| `/invre latest`                 | Neuestes wiederherstellbares Backup wiederherstellen | `invrestore.self`         |
+| `/invre <index>`                | Bestimmtes Backup per Nummer wiederherstellen        | `invrestore.self`         |
+| `/invre <death-id>`             | Bestimmtes Backup per UUID(-Präfix) wiederherstellen | `invrestore.self`         |
+| `/invre <player>`               | Backups eines anderen Spielers auflisten             | `invrestore.admin`        |
+| `/invre <player> latest`        | Neuestes Backup eines anderen Spielers wiederherstellen | `invrestore.admin.others` |
+| `/invre <player> <index/id>`    | Bestimmtes Backup eines anderen Spielers wiederherstellen | `invrestore.admin.others` |
 
 - Backups entstehen **ausschließlich** durch echte Spielertode. Es gibt bewusst
   **keinen** Command, der neue Backups anlegt.
 - In der Auflistung erscheint bei wiederherstellbaren Backups ein anklickbarer
-  `[RESTORE]`-Button (führt den jeweiligen Befehl aus).
-- **Tab-Completion** ist vollständig: `/infor <TAB>` schlägt `latest`, eigene
-  Indizes und – bei Berechtigung – Spielernamen vor; nach einem Spielernamen
-  werden die Indizes dieses Spielers vorgeschlagen.
+  `[RESTORE]`-Button (führt den jeweiligen `/invre`-Befehl aus).
+- **Tab-Completion** ist vollständig: `/invre <TAB>` schlägt `latest`, eigene
+  Indizes und – nur bei Admin-Berechtigung – Spielernamen vor; nach einem
+  Spielernamen werden die Indizes dieses Spielers vorgeschlagen. Normale Spieler
+  sehen **keine** fremden Spielernamen und können fremde Backups so nicht entdecken.
+- `/invre` für Spieler ohne Inventar (Konsole) liefert einen Hinweis auf
+  `/invre <player>`.
 
 ### Ausgabe-Beispiel
 
@@ -154,9 +159,24 @@ Vanilla das Inventar fallen lässt. Zu diesem Zeitpunkt:
 1. wird der komplette Inventarinhalt (Hauptinventar, Hotbar, Rüstung, Offhand)
    als Snapshot gespeichert (Item-Typ, Count, **alle** Data Components: Enchantments,
    Custom Name, Lore, Durability, Attribute, Custom Data, …);
-2. wird jeder lebende Stack mit der **Death-ID** markiert;
+2. wird jeder lebende Stack mit der **Death-ID** markiert (erst **nach** dem
+   Kopieren, damit die Snapshot-Kopien selbst die Markierung nicht tragen);
 3. lässt Vanilla die Items wie gewohnt auf den Boden fallen – jetzt mit
    Herkunftsmarkierung.
+
+**Der Snapshot entspricht exakt dem, was Vanilla auch behandelt.** Die
+Vanilla-Death-Pipeline wurde gegen den echten 26.1.2-Bytecode verifiziert
+(`Player#dropEquipment`):
+
+- Ist die Gamerule **`keepInventory` aktiv, droppt Vanilla nichts.** Die Mod
+  erstellt dann **kein Backup** und markiert keine Items (es gibt nichts
+  wiederherzustellen; das Inventar bleibt beim Spieler).
+- Stacks mit dem Effekt `minecraft:prevent_equipment_drop`
+  (**Fluch der Vergänglichkeit**) werden von Vanilla vor dem Drop zerstört.
+  Sie sind im Snapshot enthalten, werden aber **nicht** markiert – Vanilla
+  erzeugt für sie keine Drops, also darf es sie auch nicht geben.
+- In allen anderen Fällen deckt der Snapshot genau `Inventory#dropAll` ab
+  (Hauptinventar, Hotbar, Rüstung, Offhand).
 
 ### 2. Herkunft (Provenance)
 
@@ -225,7 +245,7 @@ invrestore/
 ├── src/main/java/com/invrestore/
 │   ├── InvRestore.java                 (ModInitializer, Verdrahtung)
 │   ├── command/
-│   │   ├── InvRestoreCommand.java      (/infor, Tab-Completion, Chat-UI)
+│   │   ├── InvRestoreCommand.java      (/invre, Tab-Completion, Chat-UI)
 │   │   ├── InvPermissions.java         (Permission-Nodes)
 │   │   └── Selector.java               (Argument-Auflösung, testbar)
 │   ├── config/InvRestoreConfig.java
@@ -236,10 +256,11 @@ invrestore/
 │   │   └── Provenance.java             (Markierung)
 │   ├── mixin/ServerPlayerMixin.java    (Snapshot vor dem Tod)
 │   └── server/
-│       ├── DeathHandler.java
-│       ├── ItemScanner.java
-│       ├── RestoreService.java
-│       └── TrackedContainers.java
+│       ├── DeathHandler.java           (Snapshot + Markierung)
+│       ├── ItemScanner.java            (Auffinden der Death-Items)
+│       ├── RestoreService.java         (Transfervorgang)
+│       ├── SnapshotPolicy.java         (was Vanilla droppt - Snapshot-Regeln)
+│       └── TrackedContainers.java      (Chunk-Load/-Unload-Tracking)
 └── src/main/resources/
     ├── fabric.mod.json
     └── invrestore.mixins.json
@@ -249,6 +270,9 @@ invrestore/
 
 ## Bekannte technische Einschränkungen
 
+- **keepInventory:** Bei aktiver Gamerule droppt Vanilla nichts → es entsteht
+  **kein Backup** und es gibt nichts wiederherzustellen. Das ist beabsichtigt
+  und entspricht dem Vanilla-Verhalten.
 - **Nur geladene Chunks.** Item-Entities und Container können nur in aktuell
   geladenen Chunks gefunden werden. Death-Items in entladenen Chunks werden beim
   ersten Restore ggf. nicht erfasst; sie werden beim nächsten Restore (Status
@@ -276,7 +300,7 @@ invrestore/
 
 ## Tests
 
-`./gradlew test` führt 16 Unit-Tests aus (die Kernlogik ist bewusst frei von
+`./gradlew test` führt **21 Unit-Tests** aus (die Kernlogik ist bewusst frei von
 Welt-/Server-Zustand gehalten, damit sie testbar ist):
 
 - **SelectorTest** – Erkennung/Auflösung von `latest`, Index, UUID-Präfix,
@@ -285,20 +309,28 @@ Welt-/Server-Zustand gehalten, damit sie testbar ist):
   `RESTORING`/`RESTORED` gesperrt.
 - **InvRestoreSavedDataTest** – Sortierung, Eigentümer-Scoping, Pruning
   (RESTORED vor AVAILABLE, AVAILABLE wird nie gelöscht), Crash-Recovery.
+- **SnapshotPolicyTest** – Snapshot-Regeln: gesamter Inventar-Container,
+  Markierung nur wenn Vanilla auch droppt (keepInventory), Kopien vor der
+  Markierung, gemeinsame Equipment-Slot-Liste von Snapshot und Scanner
+  (abgeglichen mit der verifizierten Vanilla-26.1.2-Death-Pipeline).
 
 ### Manuelle Test-Matrix (im Spiel zu prüfen)
 
 Da Item-Erzeugung und Weltzustand erst mit geladener Welt existieren, sind die
 folgenden Szenarien als manuelle In-Game-Tests gedacht:
 
-1. Steve stirbt mit 32 Dias → alle liegen am Boden → `/infor latest`: Steve +32, Welt 0.
+1. Steve stirbt mit 32 Dias → alle liegen am Boden → `/invre latest`: Steve +32, Welt 0.
 2. Alex hebt alle 32 auf → Restore: Steve +32, Alex −32.
 3. Alex hebt 12, Bob 20 → Restore: Steve +32, Alex −12, Bob −20.
 4. Nach dem Tod farmt Steve 10 weitere Dias → Restore: Steve hat 10 neue **und** 32 alte.
 5. Alex gibt Steve 5, Steve verbraucht 2 → Restore liefert nur noch 30 (keine 32 neu).
 6. Ein Teil liegt in einer Chest (geladener Chunk) → wird zurückgeführt.
 7. Server-Neustart → Backups bleiben vorhanden.
-8. Normaler Spieler mit `/infor Steve latest` → abgelehnt; OP darf es.
+8. Normaler Spieler mit `/invre Steve latest` → abgelehnt; OP darf es.
+9. Die alten, falschen Command-Namen existieren **nicht** mehr (unbekannter Command);
+   nur `/invre` funktioniert.
+10. `keepInventory true` → kein Backup, kein Markieren; nach `keepInventory false`
+    funktioniert der normale Ablauf wieder.
 
 ---
 

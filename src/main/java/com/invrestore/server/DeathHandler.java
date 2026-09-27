@@ -13,21 +13,32 @@ import com.invrestore.data.DeathBackup;
 import com.invrestore.data.InvRestoreSavedData;
 import com.invrestore.data.Provenance;
 
-import net.minecraft.core.NonNullList;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
-import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 
 /**
  * Creates the death snapshot. This runs from an injection at the head of
- * {@code ServerPlayer#die}, i.e. before vanilla drops the inventory, so the
+ * {@code ServerPlayer#die}, i.e. before vanilla touches the inventory, so the
  * snapshot reflects the exact inventory the player died with.
  *
- * <p>The live stacks are tagged with the new death id at the same moment, so
- * the items vanilla drops a few lines later carry their provenance with them.
+ * <p>Two steps, in this order:
+ * <ol>
+ *   <li>Deep-copy every carried stack into the snapshot ({@link
+ *       SnapshotPolicy#takeSnapshot}) - the copies are taken before any
+ *       modification.</li>
+ *   <li>Tag the live stacks with the death id ({@link
+ *       SnapshotPolicy#tagLiveStacks}) so the items vanilla drops shortly
+ *       afterwards carry their provenance.</li>
+ * </ol>
+ *
+ * <p>Tagging must happen after the copies are taken - otherwise the snapshot
+ * entries themselves would carry the marker, and the component order on the
+ * live stacks would differ from vanilla expectations. When {@code keepInventory}
+ * is enabled nothing is dropped, so no backup is created at all (documented
+ * behaviour). Stacks with the Curse of Vanishing are destroyed by vanilla, so
+ * they appear in the snapshot only when they will not be dropped.
  */
 public final class DeathHandler {
 	private static final Set<UUID> HANDLED = ConcurrentHashMap.newKeySet();
@@ -47,14 +58,17 @@ public final class DeathHandler {
 				return;
 			}
 
-			List<ItemStack> liveStacks = collectLiveStacks(player);
-			List<ItemStack> snapshot = new ArrayList<>();
-			for (ItemStack stack : liveStacks) {
-				if (!stack.isEmpty()) {
-					snapshot.add(stack.copy());
-				}
+			// keepInventory: vanilla drops nothing, so there is nothing to
+			// restore and no provenance to track. No backup, no tagging.
+			if (!SnapshotPolicy.dropsInventory(player)) {
+				debug("keepInventory is enabled; skipping death backup for "
+						+ player.getScoreboardName());
+				return;
 			}
-			if (snapshot.isEmpty()) {
+
+			// 1. Snapshot first: pure deep copies, unmodified stacks.
+			List<ItemStack> snapshot = SnapshotPolicy.takeSnapshot(player);
+			if (SnapshotPolicy.isEmpty(snapshot)) {
 				debug("No items to snapshot for " + player.getScoreboardName());
 				return;
 			}
@@ -73,18 +87,16 @@ public final class DeathHandler {
 					0L,
 					snapshot);
 
+			// 2. Tag the live stacks afterwards so the future drops carry
+			// their provenance (vanishing-cursed stacks stay untagged).
+			int tagged = SnapshotPolicy.tagLiveStacks(player, deathId);
+
 			InvRestoreSavedData data = InvRestoreSavedData.get(server);
 			data.addBackup(backup, InvRestoreConfig.get().maxBackupsPerPlayer);
 
-			// Tag the live stacks so the eventual drops carry their provenance.
-			for (ItemStack stack : liveStacks) {
-				if (!stack.isEmpty()) {
-					Provenance.tag(stack, deathId);
-				}
-			}
-
-			InvRestore.LOGGER.info("[InvRestore] Death backup created for {}: {} ({} stacks, {} items)",
-					backup.ownerName(), deathId, backup.stackCount(), backup.totalItemCount());
+			InvRestore.LOGGER.info(
+					"[InvRestore] Death backup created for {}: {} ({} stacks, {} items, {} tagged)",
+					backup.ownerName(), deathId, backup.stackCount(), backup.totalItemCount(), tagged);
 		} catch (Throwable t) {
 			InvRestore.LOGGER.error("[InvRestore] Failed to create death backup", t);
 		}
@@ -92,19 +104,6 @@ public final class DeathHandler {
 
 	public static void onRespawn(UUID playerId) {
 		HANDLED.remove(playerId);
-	}
-
-	private static List<ItemStack> collectLiveStacks(ServerPlayer player) {
-		List<ItemStack> stacks = new ArrayList<>();
-		Inventory inventory = player.getInventory();
-		NonNullList<ItemStack> main = inventory.getNonEquipmentItems();
-		for (int i = 0; i < main.size(); i++) {
-			stacks.add(main.get(i));
-		}
-		for (EquipmentSlot slot : ItemScanner.TRACKED_EQUIPMENT) {
-			stacks.add(player.getItemBySlot(slot));
-		}
-		return stacks;
 	}
 
 	private static void debug(String message) {

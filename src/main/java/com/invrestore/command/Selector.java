@@ -5,7 +5,7 @@ import java.util.List;
 import com.invrestore.data.DeathBackup;
 
 /**
- * Pure parsing and resolution of the {@code /infor} selector argument. Kept
+ * Pure parsing and resolution of the {@code /invre} selector argument. Kept
  * free of any server/world state so it can be unit tested directly.
  */
 public final class Selector {
@@ -65,6 +65,11 @@ public final class Selector {
 			if (index >= 1 && index <= backups.size()) {
 				return backups.get(index - 1);
 			}
+			// Fall through: an out-of-range digit run may still be the prefix
+			// of a death id (UUIDs can start with digits). Short digit runs
+			// can never be a UUID prefix and are rejected below.
+		}
+		if (!isUuidLike(selector)) {
 			return null;
 		}
 		String prefix = selector.toLowerCase();
