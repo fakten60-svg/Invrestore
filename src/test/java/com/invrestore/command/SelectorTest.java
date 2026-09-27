@@ -95,6 +95,28 @@ class SelectorTest {
 	}
 
 	@Test
+	void numericDeathIdPrefixIsNotMisreadAsIndex() {
+		// Regression: a UUID may start with digits; a digit-only argument that
+		// is not a valid index must still resolve as a death-id prefix.
+		DeathBackup only = backup(1000L, BackupStatus.AVAILABLE);
+		String id = only.id().toString();
+		if (!Character.isDigit(id.charAt(0))) {
+			return; // only meaningful when the uuid actually starts with a digit
+		}
+		List<DeathBackup> backups = new ArrayList<>(List.of(only));
+		assertSame(only, Selector.resolve(backups, id.substring(0, 8)));
+	}
+
+	@Test
+	void outOfRangeIndexDoesNotFallThroughToUuid() {
+		// Regression: "3" with two backups is an invalid index and must not
+		// accidentally match a random UUID prefix.
+		List<DeathBackup> backups = new ArrayList<>(List.of(backup(2000L, BackupStatus.AVAILABLE), backup(1000L, BackupStatus.AVAILABLE)));
+		assertNull(Selector.resolve(backups, "3"));
+		assertNull(Selector.resolve(backups, "999"));
+	}
+
+	@Test
 	void resolveIsCaseInsensitiveForLatest() {
 		DeathBackup only = backup(1000L, BackupStatus.AVAILABLE);
 		List<DeathBackup> backups = new ArrayList<>(List.of(only));

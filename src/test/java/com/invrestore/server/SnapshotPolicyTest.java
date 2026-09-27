@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
@@ -78,26 +77,14 @@ class SnapshotPolicyTest {
 	}
 
 	@Test
-	void scannerUsesSameEquipmentSlotsAsSnapshot() {
-		// ItemScanner must reference the single equipment-slot constant of
-		// SnapshotPolicy - a duplicated list could drift apart.
+	void scannerWalksSameContainerAsSnapshot() {
+		// Snapshot and scanner must both walk the whole inventory container
+		// (main + hotbar + equipment indices) - and the scanner must not do a
+		// second equipment pass over the very same stacks.
 		String text = source();
-		assertTrue(text.contains("SnapshotPolicy.TRACKED_EQUIPMENT"),
-				"ItemScanner must use SnapshotPolicy.TRACKED_EQUIPMENT instead of its own list");
-		assertTrue(text.contains("TRACKED_EQUIPMENT = List.of("),
-				"SnapshotPolicy must declare the shared TRACKED_EQUIPMENT list");
-	}
-
-	@Test
-	void equipmentSlotsMatchVanillaDeathDrop() {
-		// Vanilla drops HEAD, CHEST, LEGS, FEET and OFFHAND.
-		List<String> expected = List.of("HEAD", "CHEST", "LEGS", "FEET", "OFFHAND");
-		String text = source();
-		int listStart = text.indexOf("TRACKED_EQUIPMENT = List.of(");
-		int listEnd = text.indexOf(");", listStart);
-		String listBody = text.substring(listStart, listEnd);
-		for (String slot : expected) {
-			assertTrue(listBody.contains(slot), "Missing equipment slot " + slot);
-		}
+		assertTrue(text.contains("inventory.getContainerSize()"),
+				"Both snapshot and scanner must iterate the whole inventory container");
+		assertTrue(!text.contains("SnapshotPolicy.TRACKED_EQUIPMENT"),
+				"There must be no second equipment pass (would clear tracked stacks twice)");
 	}
 }

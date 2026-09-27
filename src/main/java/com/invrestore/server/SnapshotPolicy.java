@@ -8,7 +8,6 @@ import com.invrestore.data.Provenance;
 
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.EnchantmentEffectComponents;
@@ -28,8 +27,8 @@ import net.minecraft.world.level.gamerules.GameRules;
  *       kept and <em>nothing</em> is dropped.</li>
  *   <li>Otherwise {@code destroyVanishingCursedItems()} first removes every
  *       stack carrying the {@code minecraft:prevent_equipment_drop} enchantment
- *       effect (Verdammnis der Vergänglichkeit / Curse of Vanishing) - these
- *       stacks are destroyed, never dropped.</li>
+ *       effect (Curse of Vanishing) - these stacks are destroyed, never
+ *       dropped.</li>
  *   <li>Finally {@code Inventory#dropAll()} drops main inventory plus
  *       equipment slots and empties them.</li>
  * </ol>
@@ -48,14 +47,6 @@ public final class SnapshotPolicy {
 	private SnapshotPolicy() {
 	}
 
-	/** Equipment slots vanilla drops from a player inventory on death. */
-	public static final List<EquipmentSlot> TRACKED_EQUIPMENT = List.of(
-			EquipmentSlot.HEAD,
-			EquipmentSlot.CHEST,
-			EquipmentSlot.LEGS,
-			EquipmentSlot.FEET,
-			EquipmentSlot.OFFHAND);
-
 	/** Whether vanilla will drop the player's inventory on this death. */
 	public static boolean dropsInventory(ServerPlayer player) {
 		ServerLevel level = player.level() instanceof ServerLevel serverLevel ? serverLevel : null;
@@ -71,10 +62,13 @@ public final class SnapshotPolicy {
 	}
 
 	/**
-	 * Deep copies every stack vanilla would drop (main inventory + equipment).
-	 * Purely read-only: live stacks are not modified and not tagged here.
+	 * Deep copies every stack vanilla would drop. The player inventory is one
+	 * container in 26.1.2: indices 0-35 are main inventory plus hotbar, the
+	 * following indices are the equipment slots (head, chest, legs, feet,
+	 * offhand) - exactly what {@code Inventory#dropAll} iterates. Purely
+	 * read-only: live stacks are not modified and not tagged here.
 	 *
-	 * @return snapshot copies in vanilla order (never empty-checked here)
+	 * @return snapshot copies in vanilla order
 	 */
 	public static List<ItemStack> takeSnapshot(ServerPlayer player) {
 		List<ItemStack> snapshot = new ArrayList<>();

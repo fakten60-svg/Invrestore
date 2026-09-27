@@ -1,8 +1,8 @@
-name: Release Build
+name: CI Build
 
-# Builds and tests the mod, then attaches the mod JAR and the project source
-# ZIP as release artifacts. A release only counts as successful when the build
-# AND the tests have passed - the upload steps run after `gradle build`.
+# Continuous integration: builds and tests the mod on every push and pull
+# request and uploads the artifacts. Publishing a real GitHub Release happens
+# in release-publish.yml (triggered by version tags).
 on:
   push:
     branches: [ main, "feature/**" ]
@@ -34,10 +34,19 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
+      - name: Read project version
+        id: version
+        run: |
+          VERSION="$(grep '^mod_version=' gradle.properties | cut -d= -f2 | tr -d '[:space:]')"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Project version: $VERSION"
+
       - name: Verify command surface (only /invre may be registered)
         run: |
-          ! grep -rniE "(^|[^a-z])(/?)infor|(^|[^a-z])(/?)invor" \
-            src README.md gradle.properties build.gradle settings.gradle
+          # Dynamic pattern (in(f|v)or) so this workflow itself never contains
+          # one of the banned command names as a literal string.
+          ! grep -rniE "(^|[^a-z])(/?)in(f|v)or" \
+            src README.md RELEASE_NOTES.md docs gradle.properties build.gradle settings.gradle
           grep -rn 'Commands.literal("invre")' src/main/java/com/invrestore/command/InvRestoreCommand.java
 
       - name: Run tests
@@ -46,13 +55,21 @@ jobs:
       - name: Run full build (JAR + project source ZIP)
         run: ./gradlew build --console=plain
 
-      - name: Verify release artifacts exist
+      - name: Verify built JAR
         run: |
-          ls -la build/libs
-          test -f build/libs/invrestore-${VERSION}.jar
-          test -f build/distributions/invrestore-${VERSION}-project-sources.zip
-        env:
-          VERSION: 1.0.0
+          VERSION="${{ steps.version.outputs.version }}"
+          JAR="build/libs/invrestore-${VERSION}.jar"
+          test -f "$JAR"
+          test -f "build/libs/invrestore-${VERSION}-sources.jar"
+          test -f "build/distributions/invrestore-${VERSION}-project-sources.zip"
+          unzip -p "$JAR" fabric.mod.json | grep -q '"id": "invrestore"'
+          unzip -p "$JAR" fabric.mod.json | grep -q '"environment": "server"'
+          unzip -p "$JAR" com/invrestore/command/InvRestoreCommand.class > /tmp/InvRestoreCommand.class
+          strings /tmp/InvRestoreCommand.class | grep -qx 'invre'
+          if strings /tmp/InvRestoreCommand.class | grep -qE '/in(f|v)or'; then
+            echo "Old command name found in compiled class"; exit 1
+          fi
+          echo "JAR verified: $JAR"
 
       - name: Upload mod JAR artifact
         uses: actions/upload-artifact@v4
