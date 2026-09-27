@@ -1,8 +1,10 @@
 package com.invrestore.server;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import com.invrestore.InvRestore;
@@ -23,9 +25,27 @@ import net.minecraft.world.item.ItemStack;
  * exist and that carry the exact death id of the selected backup. That
  * property alone rules out duplication: unrelated items are never touched and
  * the same physical stack can never be counted twice.
+ *
+ * <p>Order of operations (anti-duplication has priority over anti-loss):
+ * <ol>
+ *   <li>Status check (only from AVAILABLE / FAILED / PARTIAL).</li>
+ *   <li>Per-death lock so concurrent commands cannot double-restore.</li>
+ *   <li>Owner must be online, otherwise abort before touching anything.</li>
+ *   <li>Persist status RESTORING (crash marker).</li>
+ *   <li>Scan for every stack with the matching death id.</li>
+ *   <li>Remove those stacks from the world first.</li>
+ *   <li>Deliver to the owner; overflow is dropped at the owner, never deleted.</li>
+ *   <li>Persist final status (RESTORED or PARTIAL), FAILED on error.</li>
+ * </ol>
+ *
+ * <p>Because the sources are cleared before the delivery, a mid-restore crash
+ * can at worst lose the transfer (sources cleared, delivery unsaved) - it can
+ * never duplicate items. A crash leaves the persisted RESTORING marker behind,
+ * which is reset to FAILED on the next start so a safe retry is possible.
+ * The whole restore runs synchronously on the server thread.
  */
 public final class RestoreService {
-	private static final Set<java.util.UUID> IN_PROGRESS = ConcurrentHashMap.newKeySet();
+	private static final Set<UUID> IN_PROGRESS = ConcurrentHashMap.newKeySet();
 
 	private RestoreService() {
 	}
@@ -57,6 +77,8 @@ public final class RestoreService {
 			boolean containers = InvRestoreConfig.get().enableContainerTracking;
 			List<ItemScanner.Found> found = ItemScanner.find(server, backup.id(), containers);
 
+			// Remove the tracked stacks from the world before handing copies
+			// to the owner, so the same physical stack is never counted twice.
 			List<ItemStack> gathered = new ArrayList<>();
 			for (ItemScanner.Found entry : found) {
 				gathered.add(entry.stack().copy());
@@ -69,10 +91,10 @@ public final class RestoreService {
 			}
 			debug("Found " + itemsFound + " item(s) across " + found.size() + " tracked location(s)");
 
-			int returned = deliver(owner, gathered);
+			deliver(owner, gathered);
 			if (!gathered.isEmpty()) {
 				// Deliver anything that could not be handed over as a last resort.
-				returned += dropRemaining(owner, gathered);
+				dropRemaining(owner, gathered);
 			}
 
 			long expected = backup.totalItemCount();
@@ -104,36 +126,29 @@ public final class RestoreService {
 	/**
 	 * Adds every stack to the owner's inventory. Whatever does not fit is left
 	 * in the list for the caller to drop, so a full inventory never destroys an
-	 * item.
-	 *
-	 * @return the number of stacks fully consumed by the inventory
+	 * item. The provenance marker is removed on delivery: the stacks become
+	 * ordinary items again and can never be captured twice.
 	 */
-	private static int deliver(ServerPlayer owner, List<ItemStack> stacks) {
-		int delivered = 0;
-		java.util.Iterator<ItemStack> iterator = stacks.iterator();
+	private static void deliver(ServerPlayer owner, List<ItemStack> stacks) {
+		Iterator<ItemStack> iterator = stacks.iterator();
 		while (iterator.hasNext()) {
 			ItemStack stack = iterator.next();
 			Provenance.untag(stack);
 			owner.getInventory().add(stack);
 			if (stack.isEmpty()) {
 				iterator.remove();
-				delivered++;
 			}
 		}
-		return delivered;
 	}
 
-	private static int dropRemaining(ServerPlayer owner, List<ItemStack> stacks) {
-		int dropped = 0;
+	private static void dropRemaining(ServerPlayer owner, List<ItemStack> stacks) {
 		for (ItemStack stack : stacks) {
 			if (!stack.isEmpty()) {
 				Provenance.untag(stack);
 				owner.drop(stack, false);
-				dropped++;
 			}
 		}
 		stacks.clear();
-		return dropped;
 	}
 
 	private static void debug(String message) {

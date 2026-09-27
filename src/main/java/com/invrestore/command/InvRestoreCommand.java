@@ -6,6 +6,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -30,15 +32,15 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
 /**
- * The {@code /infor} command tree.
+ * The {@code /invre} command tree.
  *
  * <pre>
- * /infor                       - list your own backups
- * /infor latest                - restore your latest restorable backup
- * /infor &lt;index|uuid&gt;          - restore one of your backups
- * /infor &lt;player&gt;              - list another player's backups (admin)
- * /infor &lt;player&gt; latest        - restore another player's latest (admin)
- * /infor &lt;player&gt; &lt;index|uuid&gt;  - restore one of another player's (admin)
+ * /invre                       - list your own backups
+ * /invre latest                - restore your latest restorable backup
+ * /invre &lt;index|uuid&gt;          - restore one of your backups
+ * /invre &lt;player&gt;              - list another player's backups (admin)
+ * /invre &lt;player&gt; latest       - restore another player's latest (admin)
+ * /invre &lt;player&gt; &lt;index|uuid&gt; - restore one of another player's (admin)
  * </pre>
  */
 public final class InvRestoreCommand {
@@ -51,7 +53,7 @@ public final class InvRestoreCommand {
 	}
 
 	public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-		dispatcher.register(Commands.literal("infor")
+		dispatcher.register(Commands.literal("invre")
 				.executes(context -> listBackups(context.getSource(), context.getSource().getPlayer(), false))
 				.then(Commands.argument(ARG_FIRST, StringArgumentType.word())
 						.suggests(InvRestoreCommand::suggestFirst)
@@ -75,7 +77,7 @@ public final class InvRestoreCommand {
 		ServerPlayer self = source.getPlayer();
 		if (Selector.isSelfSelector(argument)) {
 			if (self == null) {
-				source.sendFailure(Component.literal("Only players have their own backups; use /infor <player> as an operator."));
+				source.sendFailure(Component.literal("Only players have their own backups; use /invre <player> as an operator."));
 				return 0;
 			}
 			if (!InvPermissions.canUseSelf(source)) {
@@ -115,6 +117,7 @@ public final class InvRestoreCommand {
 		return restoreFor(source, InvRestoreSavedData.get(server), owner.get(), ownerName, selector);
 	}
 
+	/** Resolves the selector and runs the restore, reporting the outcome. */
 	private static int restoreFor(CommandSourceStack source, InvRestoreSavedData data, UUID ownerId,
 			String ownerName, String selector) {
 		List<DeathBackup> backups = data.backupsOf(ownerId);
@@ -151,7 +154,7 @@ public final class InvRestoreCommand {
 				source.sendFailure(Component.literal("You must be a player to list your own backups."));
 				return 0;
 			}
-			source.sendFailure(Component.literal("Specify a player: /infor <player>"));
+			source.sendFailure(Component.literal("Specify a player: /invre <player>"));
 			return 0;
 		}
 		if (!adminView && !InvPermissions.canUseSelf(source)) {
@@ -179,9 +182,7 @@ public final class InvRestoreCommand {
 					.append(Component.literal(" items=" + backup.totalItemCount()));
 
 			if (backup.status().canStartRestore()) {
-				String restoreCommand = selfView || adminView && !selfView
-						? buildRestoreCommand(ownerName, selfView, index)
-						: buildRestoreCommand(ownerName, false, index);
+				String restoreCommand = buildRestoreCommand(ownerName, selfView, index);
 				MutableComponent button = Component.literal(" [RESTORE]")
 						.withStyle(style -> style.withColor(ChatFormatting.AQUA)
 								.withClickEvent(new ClickEvent.RunCommand(restoreCommand)));
@@ -193,11 +194,12 @@ public final class InvRestoreCommand {
 		return backups.size();
 	}
 
+	/** Clickable command for the [RESTORE] button - always {@code /invre}. */
 	private static String buildRestoreCommand(String ownerName, boolean self, int index) {
 		if (self) {
-			return "/infor " + index;
+			return "/invre " + index;
 		}
-		return "/infor " + ownerName + " " + index;
+		return "/invre " + ownerName + " " + index;
 	}
 
 	private static ChatFormatting color(BackupStatus status) {
@@ -210,6 +212,10 @@ public final class InvRestoreCommand {
 		};
 	}
 
+	/**
+	 * Resolves a player name to its UUID. Online players are checked first,
+	 * then the stored owner names of existing backups (case-insensitive).
+	 */
 	private static Optional<UUID> resolvePlayer(MinecraftServer server, String name) {
 		ServerPlayer online = server.getPlayerList().getPlayerByName(name);
 		if (online != null) {
@@ -243,12 +249,14 @@ public final class InvRestoreCommand {
 			}
 		}
 		if (InvPermissions.canAdmin(source)) {
+			SortedSet<String> names = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
 			for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-				options.add(player.getScoreboardName());
+				names.add(player.getScoreboardName());
 			}
 			for (DeathBackup backup : data.allBackups()) {
-				options.add(backup.ownerName());
+				names.add(backup.ownerName());
 			}
+			options.addAll(names);
 		}
 		return SharedSuggestionProvider.suggest(options, builder);
 	}
