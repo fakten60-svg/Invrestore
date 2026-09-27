@@ -1,0 +1,104 @@
+name: Release Publish
+
+# Publishes a real GitHub Release when a version tag (e.g. v1.0.0) is pushed.
+# The JAR comes straight from the actual successful Gradle build; the release
+# is only created after build AND tests have passed.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to release (e.g. v1.0.0)"
+        required: true
+
+jobs:
+  release:
+    name: Build, test & publish GitHub Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Set up Java 25 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Determine release version
+        id: version
+        run: |
+          TAG="${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"
+          PROJECT="$(grep '^mod_version=' gradle.properties | cut -d= -f2 | tr -d '[:space:]')"
+          if [ "$VERSION" != "$PROJECT" ]; then
+            echo "Tag $TAG does not match project version $PROJECT" >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Releasing $TAG (project version $PROJECT)"
+
+      - name: Verify command surface (only /invre may be registered)
+        run: |
+          # Dynamic pattern (in(f|v)or) so this workflow itself never contains
+          # one of the banned command names as a literal string.
+          ! grep -rniE "(^|[^a-z])(/?)in(f|v)or" \
+            src README.md RELEASE_NOTES.md docs gradle.properties build.gradle settings.gradle
+          grep -rn 'Commands.literal("invre")' src/main/java/com/invrestore/command/InvRestoreCommand.java
+
+      - name: Run tests
+        run: ./gradlew clean test --console=plain
+
+      - name: Run release build
+        run: ./gradlew clean build --console=plain
+
+      - name: Verify built artifacts
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          JAR="build/libs/invrestore-${VERSION}.jar"
+          test -f "$JAR"
+          test -f "build/libs/invrestore-${VERSION}-sources.jar"
+          test -f "build/distributions/invrestore-${VERSION}-project-sources.zip"
+          unzip -p "$JAR" fabric.mod.json | grep -q '"id": "invrestore"'
+          unzip -p "$JAR" fabric.mod.json | grep -q '"minecraft": "~26.1.2"'
+          unzip -p "$JAR" fabric.mod.json | grep -q '"java": ">=25"'
+          unzip -p "$JAR" com/invrestore/command/InvRestoreCommand.class > /tmp/InvRestoreCommand.class
+          strings /tmp/InvRestoreCommand.class | grep -qx 'invre'
+          if strings /tmp/InvRestoreCommand.class | grep -qE '/in(f|v)or'; then
+            echo "Old command name found in compiled class"; exit 1
+          fi
+          echo "Artifacts verified: $JAR"
+
+      - name: Extract release notes
+        run: |
+          # RELEASE_NOTES.md is the notes document for the current release.
+          cp RELEASE_NOTES.md /tmp/release-notes.md
+          head -40 /tmp/release-notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: InvRestore ${{ steps.version.outputs.tag }}
+          body_path: /tmp/release-notes.md
+          files: |
+            build/libs/invrestore-${{ steps.version.outputs.version }}.jar
+            build/libs/invrestore-${{ steps.version.outputs.version }}-sources.jar
+            build/distributions/invrestore-${{ steps.version.outputs.version }}-project-sources.zip
+          fail_on_unmatched_files: true
+          make_latest: true

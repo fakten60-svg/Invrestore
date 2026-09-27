@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="200" viewBox="0 0 640 200" role="img" aria-label="InvRestore banner">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0e2a23"/>
+      <stop offset="0.55" stop-color="#123c31"/>
+      <stop offset="1" stop-color="#0b3a4a"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#34d399" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#34d399" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="640" height="200" rx="18" fill="url(#bg)"/>
+  <rect width="640" height="200" rx="18" fill="url(#sheen)"/>
+  <rect x="1" y="1" width="638" height="198" rx="17" fill="none" stroke="#34d399" stroke-opacity="0.35"/>
+
+  <!-- chest -->
+  <g transform="translate(64 52)">
+    <rect x="0" y="26" width="88" height="62" rx="6" fill="#1f2937" stroke="#9ca3af" stroke-width="3"/>
+    <path d="M0 32 Q0 26 6 26 H82 Q88 26 88 32 V50 H0 Z" fill="#374151" stroke="#9ca3af" stroke-width="3"/>
+    <rect x="37" y="42" width="14" height="16" rx="2" fill="#d1d5db" stroke="#6b7280" stroke-width="2"/>
+    <rect x="41" y="47" width="6" height="6" rx="1" fill="#111827"/>
+  </g>
+
+  <!-- return arrow -->
+  <g stroke="#34d399" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M176 96 H268"/>
+    <path d="M248 74 L272 96 L248 118"/>
+  </g>
+
+  <!-- diamond -->
+  <g transform="translate(316 70)">
+    <path d="M16 0 L32 14 L16 46 L0 14 Z" fill="#22d3ee" stroke="#0e7490" stroke-width="2"/>
+    <path d="M0 14 H32 L16 0 Z" fill="#67e8f9"/>
+  </g>
+  <g transform="translate(382 76)">
+    <path d="M12 0 L24 10.5 L12 34.5 L0 10.5 Z" fill="#a78bfa" stroke="#6d28d9" stroke-width="2"/>
+    <path d="M0 10.5 H24 L12 0 Z" fill="#c4b5fd"/>
+  </g>
+  <g transform="translate(442 82)">
+    <path d="M9 0 L18 8 L9 26 L0 8 Z" fill="#f59e0b" stroke="#b45309" stroke-width="2"/>
+    <path d="M0 8 H18 L9 0 Z" fill="#fcd34d"/>
+  </g>
+
+  <!-- title -->
+  <text x="196" y="150" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="42" font-weight="700" fill="#ecfdf5">InvRestore</text>
+  <text x="438" y="150" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="20" font-weight="600" fill="#6ee7b7">/invre</text>
+</svg>

@@ -12,7 +12,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.PlayerEnderChestContainer;
@@ -53,6 +52,15 @@ public final class ItemScanner {
 	}
 
 	private static void scanPlayer(ServerPlayer player, UUID deathId, List<Found> found) {
+		/*
+		 * One pass over the whole player inventory container. In 26.1.2 the
+		 * container layout is: 0..35 main inventory incl. hotbar, then the
+		 * equipment slots (36 head, 37 chest, 38 legs, 39 feet, 40 offhand).
+		 * A second pass over the equipment slots would evaluate the very same
+		 * stacks again and could clear a tracked stack twice (the second
+		 * Found entry would then "restore" an already removed item), so there
+		 * is deliberately no extra equipment loop here.
+		 */
 		Inventory inventory = player.getInventory();
 		for (int i = 0; i < inventory.getContainerSize(); i++) {
 			ItemStack stack = inventory.getItem(i);
@@ -60,14 +68,6 @@ public final class ItemScanner {
 				final int slot = i;
 				found.add(new Found(stack, () -> inventory.setItem(slot, ItemStack.EMPTY),
 						player.getScoreboardName() + " inventory slot " + slot));
-			}
-		}
-		for (EquipmentSlot slot : SnapshotPolicy.TRACKED_EQUIPMENT) {
-			ItemStack stack = player.getItemBySlot(slot);
-			if (Provenance.isFor(stack, deathId)) {
-				final EquipmentSlot equipmentSlot = slot;
-				found.add(new Found(stack, () -> player.setItemSlot(equipmentSlot, ItemStack.EMPTY),
-						player.getScoreboardName() + " " + slot.getSerializedName()));
 			}
 		}
 		PlayerEnderChestContainer enderChest = player.getEnderChestInventory();

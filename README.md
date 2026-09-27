@@ -1,135 +1,109 @@
-# Inventory Restore (`invrestore`)
+<div align="center">
 
-Eine **serverseitige** Fabric-Mod für **Minecraft Java Edition 26.1.2**. Sie erstellt
-bei jedem Spielertod einen vollständigen Inventar-Snapshot, versieht die beim Tod
-fallenden Items mit einer Herkunftsmarkierung (Provenance) und kann diese Items
-später aus der ganzen Spielwelt zurückholen – **ohne Item-Duplikation** und ohne
-fremde Items anzutasten.
+<img src="docs/logo.svg" alt="InvRestore Logo" width="96"/>
 
-- **Kein Client-Mod nötig.** Die Mod läuft ausschließlich auf dem Server
-  (`"environment": "server"`).
-- Normale Vanilla-Drops bleiben unverändert: Andere Spieler dürfen Death-Items
-  aufheben, handeln, einlagern usw.
-- Der Restore führt **vorhandene** Items zurück – er erzeugt niemals neue Items.
+# InvRestore
+
+**Death-Backups mit Provenance-Tracking für Minecraft 26.1.2 — Items wiederfinden statt neu erzeugen.**
+
+[![CI](https://github.com/fakten60-svg/Invrestore/actions/workflows/release.yml/badge.svg)](https://github.com/fakten60-svg/Invrestore/actions/workflows/release.yml)
+[![Release](https://github.com/fakten60-svg/Invrestore/actions/workflows/release-publish.yml/badge.svg)](https://github.com/fakten60-svg/Invrestore/actions/workflows/release-publish.yml)
+![Minecraft](https://img.shields.io/badge/Minecraft-26.1.2-34d399)
+![Java](https://img.shields.io/badge/Java-25-f59e0b)
+![Fabric](https://img.shields.io/badge/Fabric-Loader%200.19.5-blue)
+![License](https://img.shields.io/badge/License-MIT-green)
+
+</div>
 
 ---
+
+**InvRestore** ist eine rein **serverseitige** Fabric-Mod: Bei jedem echten Spielertod
+wird unmittelbar vor dem Vanilla-Drop ein vollständiger Inventar-Snapshot erzeugt
+und jedes fallende Item mit einer eindeutigen **Death-ID** markiert (Provenance).
+Später führt `/invre` genau diese Items zurück — egal ob sie auf dem Boden liegen,
+ein anderer Spieler sie aufgehoben hat oder sie in einer Truhe landeten.
+
+> Kernprinzip: **Restore erzeugt niemals Items.** Er verschiebt nur Stacks, die
+> physisch existieren und exakt die passende Death-ID tragen. Dadurch ist
+> Duplikation konstruktiv ausgeschlossen und neue Items des Spielers bleiben
+> immer unangetastet.
+
+---
+
+## Features
+
+| Feature | Beschreibung |
+|---|---|
+| 📸 Death-Snapshot | Volles Inventar (Hauptinventar, Hotbar, Rüstung, Offhand) mit allen Data Components |
+| 🏷️ Provenance | Jede Death-ID in `minecraft:custom_data`, serverseitig persistent, client-sicher |
+| 🎒 Echtes Finden | Death-Items werden dort zurückgeholt, wo sie wirklich sind — nicht aus dem Snapshot neu gespawnt |
+| 🚫 No-Duplication | Nur physikalisch vorhandene, eindeutig zugeordnete Stacks werden verschoben |
+| 🤝 Multi-Player | Aufgenommene Items werden bei Alex/Bob/Charlie erkannt und abgezogen |
+| 📦 Container-Tracking | Truhen & Co. in geladenen Chunks via Chunk-Load/-Unload-Events |
+| ✂️ Split & Merge | Geteilte Stacks behalten die Death-ID; Merging kann Herkunft nicht verwischen |
+| 🔁 Statusmaschine | `AVAILABLE` → `RESTORING` → `RESTORED` / `PARTIAL` / `FAILED`, Doppel-Restore blockiert |
+| 💾 Persistence | Vanilla `SavedData`, überlebt Neustarts; Crash-Recovery inklusive |
+| 🔐 Permissions | `invrestore.self` / `invrestore.admin` / `invrestore.admin.others` (Fabric Permission API) |
+
+---
+
+<div align="center">
+<img src="docs/banner.svg" alt="InvRestore Banner" width="480"/>
+</div>
+
+## Installation
+
+1. Fabric Loader **≥ 0.19.5** für Minecraft **26.1.2** installieren
+2. [Fabric API](https://modrinth.com/mod/fabric-api) **0.155.3+26.1.2** in den `mods`-Ordner
+3. `invrestore-1.0.0.jar` (siehe [Release](../../releases)) in den `mods`-Ordner
+4. Server starten — `config/invrestore.json` wird beim ersten Start angelegt
+
+Auf dem Client ist **nichts** zu installieren.
 
 ## Voraussetzungen
 
-| Komponente          | Version                                   |
-|---------------------|-------------------------------------------|
-| Minecraft           | **26.1.2**                                |
-| Java (Server)       | **25** oder neuer                          |
-| Fabric Loader       | **0.19.5** oder neuer                      |
-| Fabric API          | **0.155.3+26.1.2** (oder neuer für 26.1.2) |
+| Komponente | Version |
+|---|---|
+| Minecraft | **26.1.2** |
+| Java | **25** |
+| Fabric Loader | **≥ 0.19.5** |
+| Fabric API | **0.155.3+26.1.2** |
 
-> Hinweis: Ab Minecraft 26.1 ist das Spiel **nicht mehr obfuskiert**. Es werden
-> die offiziellen Mojang-Namen verwendet; Yarn wird nicht mehr unterstützt.
-> Deshalb nutzt das Projekt das neue Loom-Plugin `net.fabricmc.fabric-loom` und
-> `implementation`/`compileOnly` statt `modImplementation`/`modCompileOnly`.
-
----
-
-## Installation (Server)
-
-1. Fabric Loader 0.19.5+ für Minecraft 26.1.2 installieren.
-2. [Fabric API](https://modrinth.com/mod/fabric-api) für 26.1.2 in den `mods`-Ordner legen.
-3. Die gebaute `invrestore-1.0.0.jar` in den `mods`-Ordner legen.
-4. Server starten. Beim ersten Start wird `config/invrestore.json` angelegt.
-
-Auf dem Client ist **nichts** zu installieren – ein normaler Vanilla-/Fabric-Client
-funktioniert.
-
----
-
-## Build
-
-Voraussetzung: **JDK 25** (`JAVA_HOME` gesetzt).
-
-```bash
-# Linux/macOS
-./gradlew clean build
-
-# Windows
-gradlew.bat clean build
-```
-
-Das Ergebnis liegt unter:
-
-```
-build/libs/invrestore-1.0.0.jar     <- diese Datei auf den Server kopieren
-build/libs/invrestore-1.0.0-sources.jar
-```
-
-Nur die Mod-JAR (`invrestore-1.0.0.jar`, ohne `-sources`) in den `mods`-Ordner legen.
-
-Tests ausführen:
-
-```bash
-./gradlew test
-```
-
-### Toolchain des Projekts
-
-- Gradle **9.7.1** (Wrapper enthalten), Fabric Loom **1.18.2**
-- `tasks.withType(JavaCompile) { options.release = 25 }`
-- Minecraft **26.1.2**, Fabric Loader **0.19.5**, Fabric API **0.155.3+26.1.2**
-
----
+> Ab Minecraft 26.1 ist das Spiel unobfuscated — das Projekt nutzt das neue
+> Loom-Plugin `net.fabricmc.fabric-loom` mit Mojang-Mappings ohne Remapping.
 
 ## Commands
 
-Der einzige Command der Mod ist **`/invre`** (Inventory Restore).
+Der einzige Command ist **`/invre`** (Inventory Restore).
 
-| Befehl                          | Wirkung                                              | Berechtigung              |
-|---------------------------------|------------------------------------------------------|---------------------------|
-| `/invre`                        | Eigene Death-Backups auflisten                       | `invrestore.self`         |
-| `/invre latest`                 | Neuestes wiederherstellbares Backup wiederherstellen | `invrestore.self`         |
-| `/invre <index>`                | Bestimmtes Backup per Nummer wiederherstellen        | `invrestore.self`         |
-| `/invre <death-id>`             | Bestimmtes Backup per UUID(-Präfix) wiederherstellen | `invrestore.self`         |
-| `/invre <player>`               | Backups eines anderen Spielers auflisten             | `invrestore.admin`        |
-| `/invre <player> latest`        | Neuestes Backup eines anderen Spielers wiederherstellen | `invrestore.admin.others` |
-| `/invre <player> <index/id>`    | Bestimmtes Backup eines anderen Spielers wiederherstellen | `invrestore.admin.others` |
+| Befehl | Wirkung | Berechtigung |
+|---|---|---|
+| `/invre` | Eigene Backups auflisten | `invrestore.self` |
+| `/invre latest` | Neuestes wiederherstellbares Backup restoren | `invrestore.self` |
+| `/invre <index>` | Backup per Nummer restoren | `invrestore.self` |
+| `/invre <death-id>` | Backup per UUID(-Präfix) restoren | `invrestore.self` |
+| `/invre <player>` | Backups eines anderen Spielers auflisten | `invrestore.admin` |
+| `/invre <player> latest` | Neustes fremdes Backup restoren | `invrestore.admin.others` |
+| `/invre <player> <index\|id>` | Bestimmtes fremdes Backup restoren | `invrestore.admin.others` |
 
-- Backups entstehen **ausschließlich** durch echte Spielertode. Es gibt bewusst
-  **keinen** Command, der neue Backups anlegt.
-- In der Auflistung erscheint bei wiederherstellbaren Backups ein anklickbarer
-  `[RESTORE]`-Button (führt den jeweiligen `/invre`-Befehl aus).
-- **Tab-Completion** ist vollständig: `/invre <TAB>` schlägt `latest`, eigene
-  Indizes und – nur bei Admin-Berechtigung – Spielernamen vor; nach einem
-  Spielernamen werden die Indizes dieses Spielers vorgeschlagen. Normale Spieler
-  sehen **keine** fremden Spielernamen und können fremde Backups so nicht entdecken.
-- `/invre` für Spieler ohne Inventar (Konsole) liefert einen Hinweis auf
-  `/invre <player>`.
-
-### Ausgabe-Beispiel
-
-```
-Death backups for Steve:
-  Death #1 [AVAILABLE] 27.09.2026 18:32 minecraft:overworld 123 64 -421 items=47 [RESTORE]
-  Death #2 [RESTORED]  26.09.2026 11:04 minecraft:the_nether -20 72 100 items=12
-```
-
----
+- Tab-Completion: `latest`, eigene Indizes; Spielernamen **nur** für Admins
+- Klickbarer `[RESTORE]`-Button in der Backup-Liste (nur `/invre`-Commands)
+- Kein Command erzeugt Backups — Backups entstehen ausschließlich bei echten Toden
 
 ## Permissions
 
-Es werden moderne Fabric-Permission-Nodes verwendet (`fabric-permission-api-v1`).
-Wenn ein Permission-Plugin (z. B. LuckPerms) die Node beantwortet, gilt dessen
-Entscheidung; andernfalls greift der Standard-Fallback.
+| Node | Standard |
+|---|---|
+| `invrestore.self` | erlaubt (jeder für sich selbst) |
+| `invrestore.admin` | OP-Level 2 (`COMMANDS_GAMEMASTER`) |
+| `invrestore.admin.others` | OP-Level 2 (`COMMANDS_GAMEMASTER`) |
 
-| Node                        | Standard                                      |
-|-----------------------------|-----------------------------------------------|
-| `invrestore.self`           | **erlaubt** (jeder Spieler für sich selbst)   |
-| `invrestore.admin`          | **OP-Level 2** (`COMMANDS_GAMEMASTER`)        |
-| `invrestore.admin.others`   | **OP-Level 2** (`COMMANDS_GAMEMASTER`)        |
+Per Fabric Permission API von Mods wie LuckPerms überschreibbar; alle Prüfungen
+laufen serverseitig.
 
-- Ein normaler Spieler kann **niemals** fremde Backups sehen oder wiederherstellen.
-- Alle Berechtigungsprüfungen laufen **serverseitig**.
+## Konfiguration
 
----
-
-## Konfiguration (`config/invrestore.json`)
+`config/invrestore.json`:
 
 ```json
 {
@@ -140,250 +114,153 @@ Entscheidung; andernfalls greift der Standard-Fallback.
 }
 ```
 
-| Option                    | Bedeutung                                                                                         |
-|---------------------------|---------------------------------------------------------------------------------------------------|
-| `maxBackupsPerPlayer`     | Maximale Anzahl Backups pro Spieler. Beim Überschreiten werden zuerst **RESTORED**-Backups gelöscht, danach **FAILED**. **AVAILABLE**-Backups werden nicht gelöscht, weil sie noch wiederherstellbare Items halten. |
-| `enableAdminRestore`      | Erlaubt OPs/Admins das Verwalten fremder Backups.                                                  |
-| `enableContainerTracking` | Durchsucht bei einem Restore zusätzlich die Container in **geladenen** Chunks.                      |
-| `debugLogging`            | Ausführliche Diagnose-Logs.                                                                        |
+| Option | Bedeutung |
+|---|---|
+| `maxBackupsPerPlayer` | Backup-Limit pro Spieler; Pruning entfernt zuerst RESTORED, dann FAILED — AVAILABLE (wiederherstellbare Items) bleibt erhalten |
+| `enableAdminRestore` | Admin-Zugriff auf fremde Backups |
+| `enableContainerTracking` | Container geladener Chunks beim Restore durchsuchen |
+| `debugLogging` | Ausführliche Diagnose-Logs |
 
----
-
-## Funktionsweise
+## How it works
 
 ### 1. Tod → Snapshot + Markierung
 
-Ein Mixin springt an den **Anfang** von `ServerPlayer#die` – also **bevor**
-Vanilla das Inventar fallen lässt. Zu diesem Zeitpunkt:
+Ein Mixin an **HEAD von `ServerPlayer#die`** sichert vor dem Vanilla-Drop den
+kompletten Inventar-Container. Danach werden die Live-Stacks mit der Death-ID
+markiert — erst **nach** dem Kopieren, damit die Snapshot-Einträge die Markierung
+nicht selbst tragen. Vanilla droppt die Items wie gewohnt, jetzt mit Provenance.
 
-1. wird der komplette Inventarinhalt (Hauptinventar, Hotbar, Rüstung, Offhand)
-   als Snapshot gespeichert (Item-Typ, Count, **alle** Data Components: Enchantments,
-   Custom Name, Lore, Durability, Attribute, Custom Data, …);
-2. wird jeder lebende Stack mit der **Death-ID** markiert (erst **nach** dem
-   Kopieren, damit die Snapshot-Kopien selbst die Markierung nicht tragen);
-3. lässt Vanilla die Items wie gewohnt auf den Boden fallen – jetzt mit
-   Herkunftsmarkierung.
+Der Snapshot deckt exakt ab, was Vanilla auch behandelt (gegen den echten
+26.1.2-Bytecode verifiziert, `Player#dropEquipment`):
 
-**Der Snapshot entspricht exakt dem, was Vanilla auch behandelt.** Die
-Vanilla-Death-Pipeline wurde gegen den echten 26.1.2-Bytecode verifiziert
-(`Player#dropEquipment`):
+- **`keepInventory` aktiv** → Vanilla droppt nichts → **kein Backup, keine Markierung**
+- **Fluch der Vergänglichkeit** (`prevent_equipment_drop`) → von Vanilla zerstört →
+  im Snapshot, aber nie markiert
+- sonst → Hauptinventar, Hotbar, Rüstung, Offhand (= `Inventory#dropAll`)
 
-- Ist die Gamerule **`keepInventory` aktiv, droppt Vanilla nichts.** Die Mod
-  erstellt dann **kein Backup** und markiert keine Items (es gibt nichts
-  wiederherzustellen; das Inventar bleibt beim Spieler).
-- Stacks mit dem Effekt `minecraft:prevent_equipment_drop`
-  (**Fluch der Vergänglichkeit**) werden von Vanilla vor dem Drop zerstört.
-  Sie sind im Snapshot enthalten, werden aber **nicht** markiert – Vanilla
-  erzeugt für sie keine Drops, also darf es sie auch nicht geben.
-- In allen anderen Fällen deckt der Snapshot genau `Inventory#dropAll` ab
-  (Hauptinventar, Hotbar, Rüstung, Offhand).
-
-### 2. Herkunft (Provenance)
-
-Die Markierung wird im Vanilla-Component `minecraft:custom_data` unter dem Schlüssel
-`invrestore` gespeichert:
+### 2. Provenance / Death-ID
 
 ```
 custom_data: { invrestore: { v: 1, death: "<uuid>" } }
 ```
 
-Warum `custom_data` und keine eigene Component? Eine reine Server-Mod kann **keine**
-neue Data-Component registrieren – Vanilla-Clients kennen sie nicht und das
-Inventar-Sync-Paket würde nicht decodieren. `custom_data` ist eine Vanilla-Component,
-ist persistent und für den Client unschädlich.
+Eine Server-Mod kann keine eigene Data Component registrieren (Vanilla-Clients
+könnten das Sync-Paket nicht dekodieren) — deshalb der persistente Vanilla-
+`custom_data`-Component. Weil die Markierung Teil der Stack-Components ist,
+stacken markierte Items nicht mit normalen Items desselben Typs: gewollt und
+Grundlage des Duplikationsschutzes. Splits erben die Death-ID; Merging bleibt
+korrekt.
 
-Weil die Markierung Teil der Stack-Components ist, stapeln sich markierte Items
-**nicht** mit normalen Items oder mit Items eines anderen Todes zusammen. Genau das
-ist die gewünschte, konservative Garantie: Ein markierter Stack ist **eindeutig**
-einem einzigen Death-Backup zugeordnet. Splitting (Teilen) erzeugt zwei markierte
-Stacks mit derselben Death-ID; Merging zweier gleich markierter Stacks bleibt
-ebenfalls korrekt.
+### 3. Restore-System
 
-### 3. Restore-Algorithmus
+1. Status prüfen — Start nur aus `AVAILABLE` / `FAILED` / `PARTIAL`
+2. Restore-Lock pro Death-ID (kein paralleler Doppel-Restore)
+3. Inhaber muss online sein (sonst Abbruch, nichts wird angefasst)
+4. Suche: Inventare + Endertruhen aller Online-Spieler, alle Item-Entities,
+   Container geladener Chunks
+5. Gefundene Stacks aus ihren Quellen entfernen, dann übergeben
+6. Volles Inventar? Rest wird beim Spieler gedroppt — nie gelöscht
+7. Status persistieren
 
-1. Backup laden, Status prüfen (**nur** aus `AVAILABLE`/`FAILED`/`PARTIAL`).
-2. Restore-Lock pro Death-ID setzen (verhindert Doppel-Restore / Race Conditions).
-3. Zielinhaber ermitteln (muss online sein – sonst verweigert, um Itemverlust zu vermeiden).
-4. Alle Stacks mit passender Death-ID suchen:
-   - Inventare/Rüstung/Offhand/Endertruhe aller Online-Spieler,
-   - alle geladenen Item-Entities,
-   - (optional) alle Container in geladenen Chunks.
-5. Gefundene Stacks **aus ihren Positionen entfernen** (Slot leeren bzw. Entity entfernen).
-6. Items dem ursprünglichen Spieler geben; **was nicht ins Inventar passt, wird
-   beim Spieler gedroppt** – es geht nie verloren.
-7. Provenance-Markierung entfernen, Status auf `RESTORED` (bzw. `PARTIAL`) setzen,
-   persistieren.
+### 4. No-Duplication
 
-### 4. Warum keine Duplikation entsteht
+> Ein Restore verschiebt nur Stacks, die existieren und exakt die Death-ID tragen.
 
-Der Kern ist einfach und beweisbar: **Ein Restore verschiebt nur physikalisch
-existierende Stacks, die exakt die Death-ID tragen.** Er erzeugt niemals Items.
+- Fremde/neue Items: andere oder keine Markierung → nie angefasst
+- Verbrauchte Items: existieren nicht mehr → werden nie neu erzeugt
+- Dasselbe physische Item: wird entfernt, bevor es übergeben wird → nie doppelt
+- `RESTORED` blockiert ein zweites Restore; `PARTIAL` erlaubt sicheres Nachfassen
 
-- Fremde/neue Items haben eine andere (oder keine) Markierung → sie werden nie angefasst.
-- Dasselbe physische Item kann nicht doppelt angerechnet werden (es wird entfernt, bevor es übergeben wird).
-- Bereits verbrauchte Death-Items existieren nicht mehr → sie werden **nicht** neu erzeugt.
-- Ein vollständiges zweites Restore ist blockiert: `RESTORED` ist nicht wiederherstellbar.
+### 5. Neue Items nach dem Tod
 
-### 5. Persistenz
+Steve stirbt mit 32 Diamanten und farmt danach 10 neue. Beim Restore bekommt er
+die 32 **zusätzlich** — die 10 neuen bleiben unberührt. Die Mod rechnet nie
+„Bestand − Snapshot", sondern folgt ausschließlich der Provenance.
 
-Die Backups liegen in einem Vanilla `SavedData` (server-weit), verwaltet über
-`MinecraftServer#getDataStorage()`. Dadurch überleben sie Server-Neustarts. Ein
-durch einen Crash unterbrochener Restore (`RESTORING`) wird beim Start automatisch
-zu `FAILED` und kann gefahrlos erneut ausgeführt werden.
+### 6. Andere Spieler
 
----
+Alex hebt 12, Bob 20 von Steves 32 auf. Restore: Steve +32, Alex −12, Bob −20.
+Die Items werden genau dort entfernt, wo sie gerade sind — Alex' eigene Items
+bleiben komplett unangetastet.
 
-## Projektstruktur
+### 7. Container-Tracking
 
-```
-invrestore/
-├── build.gradle
-├── settings.gradle
-├── gradle.properties
-├── gradlew / gradlew.bat
-├── gradle/wrapper/
-├── src/main/java/com/invrestore/
-│   ├── InvRestore.java                 (ModInitializer, Verdrahtung)
-│   ├── command/
-│   │   ├── InvRestoreCommand.java      (/invre, Tab-Completion, Chat-UI)
-│   │   ├── InvPermissions.java         (Permission-Nodes)
-│   │   └── Selector.java               (Argument-Auflösung, testbar)
-│   ├── config/InvRestoreConfig.java
-│   ├── data/
-│   │   ├── BackupStatus.java
-│   │   ├── DeathBackup.java            (Snapshot + Codec)
-│   │   ├── InvRestoreSavedData.java    (Persistenz)
-│   │   └── Provenance.java             (Markierung)
-│   ├── mixin/ServerPlayerMixin.java    (Snapshot vor dem Tod)
-│   └── server/
-│       ├── DeathHandler.java           (Snapshot + Markierung)
-│       ├── ItemScanner.java            (Auffinden der Death-Items)
-│       ├── RestoreService.java         (Transfervorgang)
-│       ├── SnapshotPolicy.java         (was Vanilla droppt - Snapshot-Regeln)
-│       └── TrackedContainers.java      (Chunk-Load/-Unload-Tracking)
-└── src/main/resources/
-    ├── fabric.mod.json
-    └── invrestore.mixins.json
-```
+Chunk-Load/-Unload-Events halten einen Index geladener Chunks; der Restore
+durchsucht nur deren Block-Entity-Container. Kein Welt-Scan, kein Tick-Overhead.
 
----
+### 8. PARTIAL-Status
 
-## Bekannte technische Einschränkungen
+Sind nicht alle Items auffindbar (entladene Chunks, verbraucht,zerstört),
+erhält der Backup `PARTIAL`: die gefundenen Items werden zurückgegeben,
+der Rest gilt als verloren — es wird nichts künstlich nachgespawnt. Ein
+späterer zweiter Versuch kann neu geladene Chunks noch erfassen.
 
-- **keepInventory:** Bei aktiver Gamerule droppt Vanilla nichts → es entsteht
-  **kein Backup** und es gibt nichts wiederherzustellen. Das ist beabsichtigt
-  und entspricht dem Vanilla-Verhalten.
-- **Nur geladene Chunks.** Item-Entities und Container können nur in aktuell
-  geladenen Chunks gefunden werden. Death-Items in entladenen Chunks werden beim
-  ersten Restore ggf. nicht erfasst; sie werden beim nächsten Restore (Status
-  `PARTIAL`, erneut ausführbar) erfasst, sobald der Chunk geladen ist.
-- **Container-Tracking** erfasst Container in geladenen Chunks. Es wird **kein**
-  dauerhafter, weltweiter Scan betrieben; die Suche läuft nur bei einem Restore
-  und wird über `enableContainerTracking` gesteuert.
-- **Endertruhe wird nicht gesichert** (sie wird beim Tod nicht gedroppt), aber bei
-  der Suche mit berücksichtigt – Death-Items, die dort hineingeraten sind, werden
-  also zurückgeholt.
-- **Restore-Ziel muss online sein.** Ist der Inhaber offline, wird der Restore mit
-  klarer Meldung abgelehnt (Backup bleibt erhalten) – so geht garantiert kein Item verloren.
-- **Verbrauchte Items** (Crafting, Schmelzen, Benutzen …) können nicht
-  wiederhergestellt werden. Es wird nur zurückgegeben, was noch existiert.
-- **Markierte Items stapeln sich nicht mit normalen Items** desselben Typs. Das ist
-  beabsichtigt und die Grundlage dafür, dass Herkunft und Duplikationsschutz exakt bleiben.
-- Ein Item-Stack wird als Ganzes zurückgeführt (durch die Markierung ist er
-  eindeutig einem Death zugeordnet). Ein teilweise markierter Misch-Stack entsteht
-  dadurch gar nicht erst.
-- Minecraft verändert bei einer Vanilla-Transformation (z. B. Crafting) die
-  Data Components; das Ergebnis-Item trägt die Markierung nicht mehr und gilt damit
-  konservativ als „verbraucht".
+### 9. Persistence & Crash-Recovery
 
----
+Backups liegen in Vanilla `SavedData` (`data/invrestore_backups.dat`) und
+überleben Neustarts. Wurde ein Restore durch einen Crash unterbrochen
+(`RESTORING`), wird beim nächsten Start automatisch `FAILED` gesetzt —
+ein sauberer Retry ist möglich, ohne Duplikation.
 
-## Release / Build-Artefakte
+## Bekannte Einschränkungen
 
-Ein Release-Build erzeugt automatisch alle Artefakte:
+- **Nur geladene Chunks** — Items in entladenen Chunks werden erst bei späteren
+  Restore-Versuchen gefunden (`PARTIAL` bleibt retry-bar)
+- **keepInventory** — kein Backup (Vanilla droppt nichts; beabsichtigt)
+- **Verbrauchte/transformierte Items** — Crafting, Schmelzen u. a. erzeugen neue
+  Stacks ohne Provenance; das Original gilt konservativ als verbraucht
+- **Kein gemischtes Stacken** — markierte Items stapeln nicht mit unmarkierten
+  desselben Typs (Sicherheit schlägt Bequemlichkeit)
+- **Restore-Ziel muss online sein** — offline wird abgelehnt, damit nichts verloren geht
+
+## Build
 
 ```bash
-./gradlew clean build
+./gradlew clean build    # Linux/macOS
+gradlew.bat clean build  # Windows
 ```
 
 | Artefakt | Ort |
 |---|---|
-| **Mod-JAR** (in den `mods`-Ordner) | `build/libs/invrestore-1.0.0.jar` |
-| Sources-JAR (nur Mod-Quellen) | `build/libs/invrestore-1.0.0-sources.jar` |
-| **Source-ZIP** (komplettes Projekt) | `build/distributions/invrestore-1.0.0-project-sources.zip` |
+| Mod-JAR | `build/libs/invrestore-1.0.0.jar` |
+| Sources-JAR | `build/libs/invrestore-1.0.0-sources.jar` |
+| Source-ZIP (Projekt) | `build/distributions/invrestore-1.0.0-project-sources.zip` |
 
-Das Source-ZIP wird vom Task `projectSourcesZip` erzeugt und enthält genau den
-Projektinhalt (Quellen, Ressourcen, Build-Skripte, Gradle-Wrapper, Workflow,
-Doku) – **ohne** Build-, IDE-, OS- und temporäre Dateien.
+Nur die Mod-JAR (ohne `-sources`) gehört in den `mods`-Ordner.
 
-### Release-Automatisierung (GitHub Actions)
+## Entwicklung
 
-`.github/workflows/release.yml` baut bei jedem Push auf `main`/`feature/**`,
-bei Pull Requests und manuell (`workflow_dispatch`):
+```bash
+./gradlew test   # 24 Unit-Tests
+```
 
-1. Repository auschecken
-2. **Java 25** (Temurin) einrichten
-3. `./gradlew clean test` – Tests müssen grün sein
-4. `./gradlew build` – Mod-JAR + Source-ZIP erzeugen
-5. Command-Surface-Check: nur `/invre` darf registriert sein, keine Spur von
-   den alten, falschen Command-Namen
-6. Upload der Artefakte: **`invrestore-mc26.1.2-java25`** (Mod-JARs aus
-   `build/libs/*.jar`) und **`invrestore-sources-zip`**
-   (`build/distributions/invrestore-*-project-sources.zip`)
+| Test-Suite | Abdeckung |
+|---|---|
+| `SelectorTest` | `latest`/Index/UUID-Präfix-Auflösung, Edge Cases |
+| `BackupStatusTest` | erlaubte Übergänge, lenienter Codec |
+| `InvRestoreSavedDataTest` | Sortierung, Scoping, Pruning, Crash-Recovery |
+| `SnapshotPolicyTest` | Snapshot = Vanilla-Drop-Verhalten, Reihenfolge Kopieren→Markieren |
 
-Ein Release gilt erst als erfolgreich, wenn **Build und Tests tatsächlich
-durchgelaufen sind** – die Upload-Schritte laufen nach dem Build, schlagen
-fehlende Artefakte hart fehl (`if-no-files-found: error`).
+Die Kernlogik (Selector, Statusmaschine, Persistenz, Snapshot-Regeln) ist bewusst
+weltfrei gehalten und direkt testbar. Szenarien, die eine echte Welt brauchen
+(Pickup durch andere Spieler, Chests, Neustart), sind als manuelle Matrix in
+[docs/TESTING.md](docs/TESTING.md) dokumentiert.
 
-### Artefakt-Anforderungen
+## Release
 
-Die Release-JAR ist:
+Releases werden **durch Git-Tags** ausgelöst:
 
-- für **Minecraft 26.1.2** gebaut (`minecraft_version=26.1.2`,
-  `fabric.mod.json` → `"minecraft": "~26.1.2"`)
-- mit **Java 25** kompiliert (`options.release = 25`, requires Java ≥ 25)
-- Fabric Loader **≥ 0.19.5** + Fabric API **0.155.3+26.1.2**
-- Mod-ID **`invrestore`**, Environment `server` (kein Client-Mod nötig)
-- Command **`/invre`** (einziger registrierter Restore-Command)
+```bash
+git tag v1.0.0 && git push origin v1.0.0
+```
 
----
-
-## Tests
-
-`./gradlew test` führt **21 Unit-Tests** aus (die Kernlogik ist bewusst frei von
-Welt-/Server-Zustand gehalten, damit sie testbar ist):
-
-- **SelectorTest** – Erkennung/Auflösung von `latest`, Index, UUID-Präfix,
-  Reihenfolge „neuestes zuerst", Fehlerfälle.
-- **BackupStatusTest** – erlaubte Restore-Zustände (`AVAILABLE`/`FAILED`/`PARTIAL`);
-  `RESTORING`/`RESTORED` gesperrt.
-- **InvRestoreSavedDataTest** – Sortierung, Eigentümer-Scoping, Pruning
-  (RESTORED vor AVAILABLE, AVAILABLE wird nie gelöscht), Crash-Recovery.
-- **SnapshotPolicyTest** – Snapshot-Regeln: gesamter Inventar-Container,
-  Markierung nur wenn Vanilla auch droppt (keepInventory), Kopien vor der
-  Markierung, gemeinsame Equipment-Slot-Liste von Snapshot und Scanner
-  (abgeglichen mit der verifizierten Vanilla-26.1.2-Death-Pipeline).
-
-### Manuelle Test-Matrix (im Spiel zu prüfen)
-
-Da Item-Erzeugung und Weltzustand erst mit geladener Welt existieren, sind die
-folgenden Szenarien als manuelle In-Game-Tests gedacht:
-
-1. Steve stirbt mit 32 Dias → alle liegen am Boden → `/invre latest`: Steve +32, Welt 0.
-2. Alex hebt alle 32 auf → Restore: Steve +32, Alex −32.
-3. Alex hebt 12, Bob 20 → Restore: Steve +32, Alex −12, Bob −20.
-4. Nach dem Tod farmt Steve 10 weitere Dias → Restore: Steve hat 10 neue **und** 32 alte.
-5. Alex gibt Steve 5, Steve verbraucht 2 → Restore liefert nur noch 30 (keine 32 neu).
-6. Ein Teil liegt in einer Chest (geladener Chunk) → wird zurückgeführt.
-7. Server-Neustart → Backups bleiben vorhanden.
-8. Normaler Spieler mit `/invre Steve latest` → abgelehnt; OP darf es.
-9. Die alten, falschen Command-Namen existieren **nicht** mehr (unbekannter Command);
-   nur `/invre` funktioniert.
-10. `keepInventory true` → kein Backup, kein Markieren; nach `keepInventory false`
-    funktioniert der normale Ablauf wieder.
-
----
+Der Workflow `release-publish.yml` baut dann auf Java 25, führt die Tests aus,
+prüft die Artefakte und erstellt einen **echten GitHub Release** mit:
+`invrestore-<version>.jar`, `invrestore-<version>-sources.jar` und dem
+Source-ZIP. Die Version kommt aus `gradle.properties` — nichts wird erfunden.
+Zusätzlich läuft `release.yml` bei jedem Push/PR als CI mit Build + Tests +
+Artefakt-Upload.
 
 ## Lizenz
 
-MIT (siehe `LICENSE`).
+[MIT](LICENSE)
