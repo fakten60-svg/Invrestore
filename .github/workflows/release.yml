@@ -1,0 +1,69 @@
+name: Release Build
+
+# Builds and tests the mod, then attaches the mod JAR and the project source
+# ZIP as release artifacts. A release only counts as successful when the build
+# AND the tests have passed - the upload steps run after `gradle build`.
+on:
+  push:
+    branches: [ main, "feature/**" ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build & Test (Minecraft 26.1.2 / Java 25)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 25 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Verify command surface (only /invre may be registered)
+        run: |
+          ! grep -rniE "(^|[^a-z])(/?)infor|(^|[^a-z])(/?)invor" \
+            src README.md gradle.properties build.gradle settings.gradle
+          grep -rn 'Commands.literal("invre")' src/main/java/com/invrestore/command/InvRestoreCommand.java
+
+      - name: Run tests
+        run: ./gradlew clean test --console=plain
+
+      - name: Run full build (JAR + project source ZIP)
+        run: ./gradlew build --console=plain
+
+      - name: Verify release artifacts exist
+        run: |
+          ls -la build/libs
+          test -f build/libs/invrestore-${VERSION}.jar
+          test -f build/distributions/invrestore-${VERSION}-project-sources.zip
+        env:
+          VERSION: 1.0.0
+
+      - name: Upload mod JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: invrestore-mc26.1.2-java25
+          path: build/libs/*.jar
+          if-no-files-found: error
+
+      - name: Upload project source ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: invrestore-sources-zip
+          path: build/distributions/invrestore-*-project-sources.zip
+          if-no-files-found: error
