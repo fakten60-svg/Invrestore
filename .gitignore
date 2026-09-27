@@ -1,0 +1,15 @@
+# Gradle
+.gradle/
+build/
+
+# Fabric / Minecraft dev run directory
+run/
+logs/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store

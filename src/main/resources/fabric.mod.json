@@ -1,0 +1,27 @@
+{
+	"schemaVersion": 1,
+	"id": "invrestore",
+	"version": "${version}",
+	"name": "Inventory Restore",
+	"description": "Creates a full inventory snapshot whenever a player dies and lets players restore the exact original items from wherever they ended up, without ever duplicating or deleting unrelated items.",
+	"authors": [
+		"InvRestore"
+	],
+	"contact": {},
+	"license": "MIT",
+	"environment": "server",
+	"entrypoints": {
+		"main": [
+			"com.invrestore.InvRestore"
+		]
+	},
+	"mixins": [
+		"invrestore.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~26.1.2",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}
