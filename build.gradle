@@ -58,6 +58,35 @@ jar {
 	}
 }
 
+// Full source ZIP of the project for releases. Contains exactly the tracked
+// project content (sources, resources, build scripts, wrapper, workflow,
+// docs) and excludes all build, IDE, OS and temporary files.
+tasks.register('projectSourcesZip', Zip) {
+	group = 'build'
+	description = 'Packs the complete project sources (without build/IDE/temporary files) into build/distributions.'
+	archiveBaseName = project.archives_base_name
+	archiveClassifier = 'project-sources'
+	archiveVersion = project.version
+	destinationDirectory = layout.buildDirectory.dir('distributions')
+
+	from(rootDir) {
+		exclude 'build/**'
+		exclude '.gradle/**'
+		exclude '.git/**'
+		exclude 'run/**'
+		exclude 'logs/**'
+		exclude '.idea/**'
+		exclude '.vscode/**'
+		exclude '*.iml'
+		exclude '.DS_Store'
+	}
+}
+
+// The source ZIP belongs to every successful build so releases always ship it.
+tasks.named('build') {
+	dependsOn projectSourcesZip
+}
+
 publishing {
 	publications {
 		create('mavenJava', MavenPublication) {

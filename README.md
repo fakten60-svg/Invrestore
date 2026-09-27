@@ -298,6 +298,56 @@ invrestore/
 
 ---
 
+## Release / Build-Artefakte
+
+Ein Release-Build erzeugt automatisch alle Artefakte:
+
+```bash
+./gradlew clean build
+```
+
+| Artefakt | Ort |
+|---|---|
+| **Mod-JAR** (in den `mods`-Ordner) | `build/libs/invrestore-1.0.0.jar` |
+| Sources-JAR (nur Mod-Quellen) | `build/libs/invrestore-1.0.0-sources.jar` |
+| **Source-ZIP** (komplettes Projekt) | `build/distributions/invrestore-1.0.0-project-sources.zip` |
+
+Das Source-ZIP wird vom Task `projectSourcesZip` erzeugt und enthält genau den
+Projektinhalt (Quellen, Ressourcen, Build-Skripte, Gradle-Wrapper, Workflow,
+Doku) – **ohne** Build-, IDE-, OS- und temporäre Dateien.
+
+### Release-Automatisierung (GitHub Actions)
+
+`.github/workflows/release.yml` baut bei jedem Push auf `main`/`feature/**`,
+bei Pull Requests und manuell (`workflow_dispatch`):
+
+1. Repository auschecken
+2. **Java 25** (Temurin) einrichten
+3. `./gradlew clean test` – Tests müssen grün sein
+4. `./gradlew build` – Mod-JAR + Source-ZIP erzeugen
+5. Command-Surface-Check: nur `/invre` darf registriert sein, keine Spur von
+   den alten, falschen Command-Namen
+6. Upload der Artefakte: **`invrestore-mc26.1.2-java25`** (Mod-JARs aus
+   `build/libs/*.jar`) und **`invrestore-sources-zip`**
+   (`build/distributions/invrestore-*-project-sources.zip`)
+
+Ein Release gilt erst als erfolgreich, wenn **Build und Tests tatsächlich
+durchgelaufen sind** – die Upload-Schritte laufen nach dem Build, schlagen
+fehlende Artefakte hart fehl (`if-no-files-found: error`).
+
+### Artefakt-Anforderungen
+
+Die Release-JAR ist:
+
+- für **Minecraft 26.1.2** gebaut (`minecraft_version=26.1.2`,
+  `fabric.mod.json` → `"minecraft": "~26.1.2"`)
+- mit **Java 25** kompiliert (`options.release = 25`, requires Java ≥ 25)
+- Fabric Loader **≥ 0.19.5** + Fabric API **0.155.3+26.1.2**
+- Mod-ID **`invrestore`**, Environment `server` (kein Client-Mod nötig)
+- Command **`/invre`** (einziger registrierter Restore-Command)
+
+---
+
 ## Tests
 
 `./gradlew test` führt **21 Unit-Tests** aus (die Kernlogik ist bewusst frei von
